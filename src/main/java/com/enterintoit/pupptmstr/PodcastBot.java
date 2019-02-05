@@ -166,7 +166,8 @@ public class PodcastBot extends TelegramLongPollingBot {
 
     private void logMessage(Update update, String messageText) {
 
-        String loggingMessage = "-\nIncoming: " +
+        String loggingMessage = "--------------------------------------------\n" +
+                "Incoming: " +
                 update.getMessage().getFrom().getFirstName() +
                 "(" + update.getMessage().getFrom().getUserName() + " - " + update.getMessage().getChatId() + ")" +
                 ": " + update.getMessage().getText() +
