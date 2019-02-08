@@ -10,24 +10,23 @@ import java.util.*;
 
 public class Main {
 
-    static ArrayList<File> vol = new ArrayList<>();//массив выпусков подкастов
+    static ArrayList<String> vol = new ArrayList<>();//массив выпусков подкастов
     static String key;
 
 
     public static void main(String[] args) {
-        vol.add(0, new File("1.mp3"));
-        vol.add(1, new File("2.mp3"));
-        vol.add(2, new File("3.mp3"));
-        vol.add(3, new File("4.mp3"));
-        vol.add(4, new File("5.mp3"));
-        vol.add(5, new File("6.mp3"));
-        vol.add(6, new File("7.mp3"));
-        System.out.println("Файлы прочитаны...");
-
         try {
+            String line;
             BufferedReader reader = new BufferedReader(new FileReader(new File("key.txt")));
             key = reader.readLine();
             System.out.println("Ключ прочитан...");
+            reader = new BufferedReader(new FileReader(new File("audioIds.txt")));
+            int i = 0;
+            while ((line = reader.readLine()) != null) {
+                vol.add(i, line);
+                i++;
+            }
+            System.out.println("Выпуски прочитаны и добавлены в массив..");
         } catch (IOException e) {
             e.printStackTrace();
         }

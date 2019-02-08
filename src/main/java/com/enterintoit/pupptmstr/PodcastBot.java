@@ -7,8 +7,14 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.*;
+import java.util.ArrayList;
 
 public class PodcastBot extends TelegramLongPollingBot {
+
+    private static final String BLACKLIST = "blacklist.txt";
+    private static final String ADMINS = "admins.txt";
+    private static final String VOLS_SUBS = "volsSubs.txt";
+    private static final String NEWS_SUBS = "newsSubs.txt";
 
     @Override
     public void onUpdateReceived(Update update) {
@@ -16,11 +22,28 @@ public class PodcastBot extends TelegramLongPollingBot {
 
             if (update.getMessage().getText().charAt(0) == '/') {
                 commandChecker(update);
+            } else if(update.getMessage().getText().charAt(0) == '#'){
+                wait(update);
+                messageFormatChecker(update);
             } else phraseChecker(update);
 
+        } else if (update.hasMessage()
+                && (update.getMessage().getAudio() != null)
+                && isAdmin(update.getMessage().getChatId().toString())) {
+            String audioId = update.getMessage().getAudio().getFileId();
+            SendAudio msg = new SendAudio()
+                    .setChatId(update.getMessage().getChatId())
+                    .setCaption(audioId)
+                    .setAudio(audioId);
+            try {
+                execute(msg);
+            } catch (TelegramApiException e) {
+                e.printStackTrace();
+            }
         } else
             sorry(update);
     }
+
 
     @Override
     public String getBotUsername() {
@@ -32,41 +55,42 @@ public class PodcastBot extends TelegramLongPollingBot {
         return Main.key;
     }
 
+    //-------------------------------------Чекеры----------------------------------
     private void commandChecker(Update update) {
         switch(update.getMessage().getText()) {
             case "/start":
                 hello(update);
+            break;
+            case "/help":
+                help(update);
                 break;
             case "/vol1":
-                wait(update);
-                sendPodcast(update, 1);
+                vol(update, 1);
                 break;
             case "/vol2":
-                wait(update);
-                sendPodcast(update, 2);
+                vol(update, 2);
                 break;
             case "/vol3":
-                wait(update);
-                sendPodcast(update, 3);
+                vol(update, 3);
                 break;
             case "/vol4":
-                wait(update);
-                sendPodcast(update, 4);
+                vol(update, 4);
                 break;
             case "/vol5":
-                wait(update);
-                sendPodcast(update, 5);
+                vol(update, 5);
                 break;
             case "/vol6":
-                wait(update);
-                sendPodcast(update, 6);
+                vol(update, 6);
                 break;
             case "/vol7":
-                wait(update);
-                sendPodcast(update, 7);
+                vol(update, 7);
                 break;
             case "/allVolumes":
-                sendAllPodcasts(update);
+                wait(update);
+                allVolumes(update);
+            break;
+            case "/volumesList":
+                volumesList(update);
                 break;
             case "/news":
                 wait(update);
@@ -80,46 +104,153 @@ public class PodcastBot extends TelegramLongPollingBot {
                 wait(update);
                 subsAction(update, 0);
                 break;
-            case "/help":
-                help(update);
+            //Блок с админскими командами
+            case "/status":
+                wait(update);
+                if (isAdmin(update.getMessage().getChatId().toString())) {
+                        statusAdmin(update);
+                    }
+                    else {
+                        statusSub(update);
+                    }
                 break;
             case "/admin":
                 if (isAdmin(update.getMessage().getChatId().toString())) {
-                    SendMessage message = new SendMessage()
-                            .setChatId(update.getMessage().getChatId())
-                            .setText("Вау, админ! Позже я прикручу рассылку сообщений для вас\n...\nЖдите");
-                    try {
-                        execute(message);
-                        logMessage(update, message.getText());
-                    } catch (TelegramApiException e) {
-                        e.printStackTrace();
-                    }
+                    sendAdminCommands(update);
                 } else {
-                    SendMessage notAdminMessage = new SendMessage()
-                            .setChatId(update.getMessage().getChatId())
-                            .setText("Эмммм, ты кто такой?\nТы не админ, брат.\nНе используй эту команду");
-                    try {
-                        execute(notAdminMessage);
-                    } catch (TelegramApiException e) {
-                        e.printStackTrace();
-                    }
+                    requestForAdminMessageFormat(update);
                 }
                 break;
-            default:
-                SendMessage defaultMessage = new SendMessage()
-                        .setChatId(update.getMessage().getChatId())
-                        .setText("Вау, комада! Сейчас я её как выполню!\n...\nНичего не вышло, а жаль\n" +
-                                "Исправте команду и попробуйте еще раз");
-                try {
-                    execute(defaultMessage);
-                    logMessage(update, defaultMessage.getText());
-                } catch (TelegramApiException e) {
-                    e.printStackTrace();
+            case "/reply":
+                if (isAdmin(update.getMessage().getChatId().toString())) {
+                    adminReplyMessageFormat(update);
+                } else {
+                    replyMessageSender(update, "Эмммм, ты кто такой?\n" +
+                            "Ты не админ, брат.\nНе используй эту команду");
                 }
+                break;
+            case "/distribution":
+                if (isAdmin(update.getMessage().getChatId().toString())) {
+                    distributionMessageFormat(update);
+                } else {
+                    replyMessageSender(update, "Эмммм, ты кто такой?\n" +
+                            "Ты не админ, брат.\nНе используй эту команду");
+                }
+                break;
+            case "/ban":
+                if (isAdmin(update.getMessage().getChatId().toString()))
+                    banMessageFormat(update);
+                else
+                    replyMessageSender(update, "Эмммм, ты кто такой?\n" +
+                            "Ты не админ, брат.\nНе используй эту команду");
+                break;
+            default:
+                replyMessageSender(update, "Вау, комада! Сейчас я её как выполню!" +
+                        "\n...\nНичего не вышло, а жаль\n" +
+                        "Исправте команду и попробуйте еще раз");
         }
     }
 
-    private void messageSender(Update update, String text) {
+    private void messageFormatChecker(Update update) {
+        AdminMessageParser messageParser = new AdminMessageParser(update.getMessage().getText());
+        messageParser.checkMatchingAndParse();
+        if (!messageParser.getError().equals("error")) {
+            switch (messageParser.getMessageType()) {
+                case "adm":
+                    switch (messageParser.getContentType()) {
+                        case "thm":
+                            if (isBaned(update.getMessage().getChatId().toString()))
+                                replyMessageSender(update, "Вы находитесь в черном списке, " +
+                                        "данная функция для вас недоступна");
+                            else
+                                themeForAdminMessageSender(update, messageParser.getMessageText());
+                            break;
+                        case "req":
+                            if (isBaned(update.getMessage().getChatId().toString()))
+                                replyMessageSender(update, "Вы находитесь в черном списке, " +
+                                        "данная функция для вас недоступна");
+                            else
+                                requestForAdminsMessageSender(update, messageParser.getMessageText());
+                            break;
+                        default:
+                            replyMessageSender(update, "Неверный тип содержания");
+                    }
+                    break;
+                case "dis":
+                    if(isAdmin(update.getMessage().getChatId().toString())) {
+                        switch (messageParser.getContentType()) {
+                            case "news":
+                                distributionMessageSender(update, 1, messageParser.getMessageText());
+                                break;
+                            case "episode":
+                                distributionMessageSender(update, 2, messageParser.getMessageText());
+                                break;
+                            case "all":
+                                distributionMessageSender(update, 1, messageParser.getMessageText());
+                                distributionMessageSender(update, 2, messageParser.getMessageText());
+                                break;
+                            default:
+                                replyMessageSender(update, "Неверный тип содержания.");
+                        }
+                    } else
+                        replyMessageSender(update, "Простите, у вас нет прав администратора.");
+                    break;
+                case "rep":
+                    if (isAdmin(update.getMessage().getChatId().toString())) {
+                        if (messageParser.getContentType().length() == 9) {
+                            adminReplyMessageSender(update,
+                                    messageParser.getContentType(),
+                                    messageParser.getMessageText());
+                        } else
+                            replyMessageSender(update, "Неверный chatId");
+                    } else
+                        replyMessageSender(update, "Простите, у вас нет прав администратора");
+                    break;
+                case "ban":
+                    if (isAdmin(update.getMessage().getChatId().toString())){
+                        if (messageParser.getContentType().length() == 9) {
+                            if (!isBaned(messageParser.getContentType()))
+                                ban(update, messageParser.getContentType());
+                            else
+                                replyMessageSender(update, "Данный юзер уже забанен...");
+                        } else
+                            replyMessageSender(update, "Неверный chatId");
+                    }
+                default:
+                    replyMessageSender(update, "Ошибка в типе сообщения, попробуйте еще раз.");
+
+            }
+        } else
+            replyMessageSender(update, "Неверный формат сообщения, исправте и попробуйте еще раз.");
+
+    }
+
+    private void phraseChecker(Update update) {
+        switch (update.getMessage().getText().toLowerCase()) {
+            case "хуй":
+                replyMessageSender(update, "залупа");
+                break;
+            case "пидор":
+                replyMessageSender(update, "ты");
+                break;
+            case "спасибо":
+                replyMessageSender(update, "всегда пожалуйста");
+                break;
+            case "привет":
+                replyMessageSender(update, "Дарова)\nЛадно, шучу");
+                hello(update);
+                break;
+            default:
+                missunderstand(update);
+        }
+    }
+    //-----------------------------------------------------------------------------
+
+
+
+
+    //-------------------------------------Сендеры---------------------------------
+    private void replyMessageSender(Update update, String text) {
         SendMessage message = new SendMessage()
                 .setChatId(update.getMessage().getChatId())
                 .setText(text);
@@ -131,119 +262,146 @@ public class PodcastBot extends TelegramLongPollingBot {
         }
     }
 
-    private void phraseChecker(Update update) {
-        switch (update.getMessage().getText()) {
-            case "хуй":
-                messageSender(update, "залупа");
-                break;
-            case "Хуй":
-                messageSender(update, "Залупа");
-                break;
-            case "пидор":
-                messageSender(update, "ты");
-                break;
-            case "Пидор":
-                messageSender(update, "Ты");
-                break;
-            case "спасибо":
-                messageSender(update, "всегда пожалуйста");
-                break;
-            case "Спасибо":
-                messageSender(update, "Всегда пожалуйста");
-                break;
-            case "привет":
-                messageSender(update, "Дарова)\nЛадно, шучу");
-                hello(update);
-                break;
-            case "Привет":
-                messageSender(update, "Дарова)\nЛадно, шучу");
-                hello(update);
-                break;
-                default:
-                    missunderstand(update);
-        }
-    }
-
-    private void logMessage(Update update, String messageText) {
-
-        String loggingMessage = "--------------------------------------------\n" +
-                "Incoming: " +
-                update.getMessage().getFrom().getFirstName() +
-                "(" + update.getMessage().getFrom().getUserName() + " - " + update.getMessage().getChatId() + ")" +
-                ": " + update.getMessage().getText() +
-                "\nReply: " + messageText;
-        System.out.println(loggingMessage);
-
+    private void themeForAdminMessageSender(Update update, String text) {
+        ArrayList<String> admins = new ArrayList<>();
+        String line;
         try {
-
-            File file = new File("Log.txt");
-            FileWriter fileReader = new FileWriter(file, true);
-            BufferedWriter bufferedWriter = new BufferedWriter(fileReader);
-
-            bufferedWriter.write(loggingMessage + "\n");
-            bufferedWriter.close();
-
-        } catch (Exception e) {
+            BufferedReader reader = new BufferedReader(new FileReader(new File(ADMINS)));
+            while ((line = reader.readLine()) != null) {
+                admins.add(line);
+            }
+        } catch (IOException e) {
             e.printStackTrace();
         }
 
+        for (String adm : admins) {
+            SendMessage message = new SendMessage()
+                    .setChatId(adm)
+                    .setText("Предложение темы для обсуждения в выпуске:\n" +
+                            "От "+ update.getMessage().getFrom().getFirstName() +
+                            "(" + update.getMessage().getFrom().getUserName() + ")\n\n" +
+                            "Предложенная тема: " + text);
+            try {
+                execute(message);
+                logMessage(update, "Админу" + adm + " отправлено предложение темы для рассылки");
+            } catch (TelegramApiException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
-    private boolean isAdmin(String chatId) {
-        boolean res = false;
-        try{
-            File file = new File("admins.txt");
-            FileReader fileReader = new FileReader(file);
-            BufferedReader bufferedReader = new BufferedReader(fileReader);
+    private void requestForAdminsMessageSender(Update update, String text) {
+        String line;
+        ArrayList<String> admins = new ArrayList<>();
+        try {
+            FileReader fileReader = new FileReader(new File(ADMINS));
+            BufferedReader reader = new BufferedReader(fileReader);
+            while ((line = reader.readLine()) != null) {
+                admins.add(line);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
-            String line;
-
-            while((line = bufferedReader.readLine()) != null) {
-                if (chatId.equals(line))
-                    res = true;
+        for (String adm : admins) {
+            SendMessage message = new SendMessage()
+                    .setChatId(adm)
+                    .setText("Пришел запрос:\n" +
+                            text +
+                            "\n\nАвтор:");
+            SendMessage sendClientChatId = new SendMessage()
+                    .setChatId("adm")
+                    .setText(update.getMessage().getChatId().toString());
+            try {
+                execute(message);
+                execute(sendClientChatId);
+                logMessage(update, "Админам отослан запрос от " + update.getMessage().getChatId());
+            } catch (TelegramApiException e) {
+                e.printStackTrace();
             }
 
-        } catch (Exception e){
+        }
+    }
+
+    //только текстовые ответы
+    private void adminReplyMessageSender(Update update, String destinationChatId, String messageText){
+        SendMessage message = new SendMessage()
+                .setChatId(destinationChatId)
+                .setText(messageText);
+        try {
+            execute(message);
+            logMessage(update, messageText);
+        }catch (TelegramApiException e) {
             e.printStackTrace();
         }
-        return res;
     }
 
-    private void sorry(Update update) {
-        messageSender(update, "Извините, мы пока можем отвечать только на текстовые сообщения");
-    }
+    //1 - новость, 2 - новый эпизод
+    private void distributionMessageSender(Update update, int typeOfMes, String messageText) {
+        String fileName;
+        BufferedReader reader;
+        ArrayList<String> subs = new ArrayList<>();
+        String line;
 
+        if (typeOfMes == 1)
+            fileName = NEWS_SUBS;
+        else
+            fileName = VOLS_SUBS;
+
+        try {
+            reader = new BufferedReader(new FileReader(new File(fileName)));
+            while ((line = reader.readLine()) != null) {
+                subs.add(line);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        for (String sub : subs) {
+            SendMessage message = new SendMessage()
+                    .setChatId(sub)
+                    .setText(messageText);
+            try {
+                execute(message);
+            } catch (TelegramApiException e) {
+                e.printStackTrace();
+            }
+        }
+        logMessage(update, "Разослано сообщение подписчикам " + fileName);
+        logMessage(update, "Отправлено " + subs.size() + "сообщений");
+    }
+    //-----------------------------------------------------------------------------
+
+
+
+
+
+    //-----------------------------Пользовательские команды------------------------
     private void help(Update update) {
-        messageSender(update,
+        replyMessageSender(update,
                 "Я чат-бот проекта ЗайдиВАйТи\n" +
-                        "Это тестовая версия, так что умею я пока не много и буду рад feedback'y\n" +
+                        "Это тестовая версия, так что умею я пока не много\n" +
+                        "Буду рад feedback'y)\n" +
                         "Вот что я могу:\n" +
-                        "/vol<номер выпуска> - выслать выпуск c указанным номером\n" +
-                        "Например /vol2\n" +
-                        "/allVolumes - выслать полный список всех выпусков\n" +
                         "/help - помощь(это самое меню)\n" +
+                        "/vol{№} - выслать выпуск c указанным номером\n" +
+                        "Например /vol2\n" +
+                        "/allVolumes - выслать все выпуски по порядку\n" +
+                        "/volumesList - выслать полный список выпусков\n" +
                         "/vols - подписаться на рассылку новых выпусков\n" +
                         "/news - подписаться на новостную рассылку проекта\n" +
                         "/sub - полная подписка\n" +
-                        "Прошу заметить, что отправка выпуска может занять несколько минут.");
+                        "/status - проверка статуса своих подписок\n" +
+                        "Для отмены подписки используются те же команды, что и для её активации\n" +
+                        "/admin - получить формат сообщения для общения с администрацией\n" +
+                        "(получить список команд для админов, если вы админ)");
     }
 
-    private void hello(Update update) {
-        messageSender(update, "Здравствуй " + update.getMessage().getFrom().getFirstName() +
-                "\nРады видеть вас здесь!");
-        help(update);
-    }
-
-    private void missunderstand(Update update) {
-        messageSender(update, "Простите, возможно я вас не понимаю...\nЭто поможет нам лучше понимать друг друга:");
-        help(update);
-    }
-
-    private void sendPodcast(Update update, int numOfPodcast) {
+    private void vol(Update update, int numOfPodcast) {
         SendAudio audio = new SendAudio()
                 .setChatId(update.getMessage().getChatId())
-                .setAudio(Main.vol.get(numOfPodcast - 1))
-                .setTitle(numOfPodcast + "й выпуск");
+                .setAudio(Main.vol.get(numOfPodcast - 1));
+        //.setTitle(numOfPodcast + "й выпуск");
         try {
             execute(audio);
             logMessage(update,  "отправлено аудио - " + audio.getTitle());
@@ -252,8 +410,14 @@ public class PodcastBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendAllPodcasts(Update update) {
-        messageSender(update,
+    private void allVolumes(Update update) {
+        for (int i = 0; i < 7; i++) {
+            vol(update, i+1);
+        }
+    }
+
+    private void volumesList(Update update) {
+        replyMessageSender(update,
                 "Список всех эпизодов подкаста:\n" +
                         "/vol1 - 1.Вводный выпуск(ч.1)\n" +
                         "/vol2 - 2.Вводный выпуск(ч.2)\n" +
@@ -264,12 +428,7 @@ public class PodcastBot extends TelegramLongPollingBot {
                         "/vol7 - 7.Как понять андроида(ч.2 Новые языки)");
     }
 
-    private void wait(Update update) {
-        messageSender(update, "Подождите, выполняю...");
-        messageSender(update, "Это может занять определенное время(не расстраивайтесь)");
-    }
-
-    //0 - полная подписка, 1 - новостная, 2 - подписка на новые выпуски
+    //0 - полная подписка, 1 - новостная, 2 - эпизодическая
     private void subsAction(Update update, int typeOfSub) {
         switch (typeOfSub) {
             case 1:
@@ -302,11 +461,17 @@ public class PodcastBot extends TelegramLongPollingBot {
     }
 
     private void addSub(Update update, String fileName) {
+        String subType;
+        if (fileName.equals(NEWS_SUBS))
+            subType = "новостная";
+        else
+            subType = "эпизодическая";
         try {
-            BufferedWriter writer = new BufferedWriter(new FileWriter(new File(fileName)));
+            BufferedWriter writer = new BufferedWriter(new FileWriter(new File(fileName), true));
             writer.write(update.getMessage().getChatId().toString());
+            writer.newLine();
             writer.close();
-            messageSender(update, "Добавлена подписка...");
+            replyMessageSender(update, "Добавлена " + subType + " подписка...");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -314,11 +479,16 @@ public class PodcastBot extends TelegramLongPollingBot {
     }
 
     private void deleteSub(Update update, String fileName) {
+        String subType;
+        if (fileName.equals(NEWS_SUBS))
+            subType = "новостная";
+        else
+            subType = "эпизодическая";
         try {
             File file = new File(fileName);
             File tempFile = new File(fileName + ".tmp");
             BufferedReader reader = new BufferedReader(new FileReader(file));
-            BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile));
+            BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile, true));
             String line;
 
             while ((line = reader.readLine()) != null) {
@@ -337,7 +507,7 @@ public class PodcastBot extends TelegramLongPollingBot {
             } else
                 System.out.println("Ошибка удаления...");
 
-            messageSender(update, "Подписка удалена...");
+            replyMessageSender(update, "Удалена " + subType + " подписка...");
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -359,5 +529,200 @@ public class PodcastBot extends TelegramLongPollingBot {
         }
         return res;
     }
+
+    private void statusSub(Update update) {
+        String newsSub = "off", volsSub = "off";
+        if (isSub(update, NEWS_SUBS))
+            newsSub = "on";
+        if(isSub(update, VOLS_SUBS))
+            volsSub = "on";
+        replyMessageSender(update,  update.getMessage().getFrom().getFirstName() +
+                "(" + update.getMessage().getFrom().getUserName() + ")" +
+                "\nНовостная подписка: " + newsSub +
+                "\nЭпизодическая подписка: " + volsSub);
+    }
+
+    private void requestForAdminMessageFormat(Update update) {
+        replyMessageSender(update, "Формат сообщения для обращения к админам:\n" +
+                "#adm(тип сообщения - обращение к админам)\n" +
+                "#thm/req(тип содержимого - предложение темы/обращение к админам)\n" +
+                "#Текст сообщения\n\n" +
+                "#adm\n" +
+                "#req\n" +
+                "#Уважаемые админы, помогите мне пожалуйста с такой-то и такой-то проблемой\n" +
+                "Возможные типы содержимого в данной ситуации:\n" +
+                "thm - предложить тему для будущих выпусков\n" +
+                "req - обратиться к админам с просьбой\n");
+    }
+    //-----------------------------------------------------------------------------
+
+
+
+    //-----------------------------Админские команды-------------------------------
+    private void sendAdminCommands(Update update){
+        replyMessageSender(update, "Здравствуйте, господин админ!\n" +
+                "Список админских команд:\n" +
+                "/admin - получить список админских команд\n" +
+                "/status - получить информацию о количестве подписчиков\n" +
+                "/distribution - получить формат сообщения для рассылки его подписчикам\n" +
+                "/reply - получить формат сообщения для ответа конкретному подписчику\n" +
+                "/ban - получить формат сообщения, для отправки подписчика в бан");
+    }
+
+    private void statusAdmin(Update update) {
+        int newsCounter = 0, volsCounter = 0;
+        try {
+            BufferedReader reader = new BufferedReader(new FileReader(new File(NEWS_SUBS)));
+            while (reader.readLine() != null)
+                newsCounter++;
+
+            reader = new BufferedReader(new FileReader(new File(VOLS_SUBS)));
+            while (reader.readLine() != null)
+                volsCounter++;
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        replyMessageSender(update, "Подписчики новостей: " + newsCounter +
+                "\nПодписчики выпусков: " + volsCounter);
+    }
+
+    private void distributionMessageFormat(Update update){
+        replyMessageSender(update, "Формат сообщения для рассылки:\n" +
+                "#dis(тип сообщения - рассылка)\n" +
+                "#news/episode/all(тип содержимого = тип рассылки)\n" +
+                "#Текст сообщения самой рассылки\n\n" +
+                "Для самой рассылки просто отправте сообщение нужного формата.\n" +
+                "Пример:\n\n" +
+                "#dis\n" +
+                "#all\n" +
+                "#Внимание друзья! Это рассылка!");
+    }
+
+    private void adminReplyMessageFormat(Update update) {
+        replyMessageSender(update, "Формат сообщения для ответа подписчику:\n" +
+                "#rep(типа сообщения - ответ подписчику)\n" +
+                "#000000000(тип содержания - chatId подписчика)\n" +
+                "#Текст сообщения ответа\n\n" +
+                "Для ответа просто отправте сообщение нужного формата.\n" +
+                "Пример:\n\n" +
+                "#rep\n" +
+                "#299233972\n" +
+                "#Спасибо за ваше сообщение! Мой ответ бла бла бля");
+    }
+
+    private void banMessageFormat(Update update) {
+        replyMessageSender(update, "Формат сообщения для отправки юзера в бан-лист:\n" +
+                "#ban(тип сообщения - забанить юзера\n" +
+                "#0000000(тип содержания - chatId юзера)\n" +
+                "#(текст - в данном случае не нужен, но хэштег обязателен)\n" +
+                "Пример:\n\n" +
+                "#ban\n" +
+                "#0000000\n" +
+                "#");
+    }
+    //-----------------------------------------------------------------------------
+
+
+
+    //----------------------------Вспомогательные мессенджи------------------------
+    private void sorry(Update update) {
+        replyMessageSender(update, "Извините, мы пока можем отвечать только на текстовые сообщения");
+    }
+
+    private void hello(Update update) {
+        replyMessageSender(update, "Здравствуй " + update.getMessage().getFrom().getFirstName() +
+                "\nРады видеть вас здесь!");
+        help(update);
+    }
+
+    private void missunderstand(Update update) {
+        replyMessageSender(update, "Простите, возможно я вас не понимаю...\nЭто поможет нам лучше понимать друг друга:");
+        help(update);
+    }
+
+    private void wait(Update update) {
+        replyMessageSender(update, "Подождите, выполняю...");
+        //replyMessageSender(update, "Это может занять определенное время(не расстраивайтесь)");
+    }
+
+    private void ban(Update update, String chatId) {
+        try {
+            BufferedWriter writer = new BufferedWriter(new FileWriter(new File(BLACKLIST), true));
+            writer.write(chatId);
+            writer.newLine();
+            writer.close();
+            replyMessageSender(update, "Юзер " + chatId + " забанен...");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+    //-----------------------------------------------------------------------------
+
+
+
+    //-------------------------------Системные команды-----------------------------
+    private void logMessage(Update update, String messageText) {
+
+        String loggingMessage = "--------------------------------------------\n" +
+                "Incoming: " +
+                update.getMessage().getFrom().getFirstName() +
+                "(" + update.getMessage().getFrom().getUserName() + " - " + update.getMessage().getChatId() + ")" +
+                ": " + update.getMessage().getText() +
+                "\nReply: " + messageText;
+        System.out.println(loggingMessage);
+
+        try {
+
+            File file = new File("Log.txt");
+            FileWriter fileReader = new FileWriter(file, true);
+            BufferedWriter bufferedWriter = new BufferedWriter(fileReader);
+
+            bufferedWriter.write(loggingMessage + "\n");
+            bufferedWriter.close();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    private boolean isAdmin(String chatId) {
+        boolean res = false;
+        try{
+            File file = new File(ADMINS);
+            FileReader fileReader = new FileReader(file);
+            BufferedReader bufferedReader = new BufferedReader(fileReader);
+
+            String line;
+
+            while((line = bufferedReader.readLine()) != null) {
+                if (chatId.equals(line))
+                    res = true;
+            }
+
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+        return res;
+    }
+
+    private boolean isBaned(String chatId) {
+        boolean res = false;
+        try {
+            BufferedReader reader = new BufferedReader(new FileReader(new File(BLACKLIST)));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.equals(chatId)) {
+                    res = true;
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return res;
+    }
+    //-----------------------------------------------------------------------------
 
 }
