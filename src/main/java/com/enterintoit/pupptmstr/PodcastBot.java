@@ -19,10 +19,10 @@ public class PodcastBot extends TelegramLongPollingBot {
     @Override
     public void onUpdateReceived(Update update) {
         if (update.hasMessage() && update.getMessage().hasText()) {
-
+            logUsersMessage(update);
             if (update.getMessage().getText().charAt(0) == '/') {
                 commandChecker(update);
-            } else if(update.getMessage().getText().charAt(0) == '#'){
+            } else if(update.getMessage().getText().charAt(0) == '='){
                 wait(update);
                 messageFormatChecker(update);
             } else phraseChecker(update);
@@ -30,6 +30,7 @@ public class PodcastBot extends TelegramLongPollingBot {
         } else if (update.hasMessage()
                 && (update.getMessage().getAudio() != null)
                 && isAdmin(update.getMessage().getChatId().toString())) {
+            logEvent("Админ прислал аудиозапись, отправляю ему её id");
             String audioId = update.getMessage().getAudio().getFileId();
             SendAudio msg = new SendAudio()
                     .setChatId(update.getMessage().getChatId())
@@ -39,6 +40,7 @@ public class PodcastBot extends TelegramLongPollingBot {
                 execute(msg);
             } catch (TelegramApiException e) {
                 e.printStackTrace();
+                logEvent(e.getLocalizedMessage());
             }
         } else
             sorry(update);
@@ -256,9 +258,10 @@ public class PodcastBot extends TelegramLongPollingBot {
                 .setText(text);
         try {
             execute(message);
-            logMessage(update, message.getText());
+            logBotsMessage(message.getText());
         } catch (TelegramApiException e) {
             e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
         }
     }
 
@@ -272,6 +275,7 @@ public class PodcastBot extends TelegramLongPollingBot {
             }
         } catch (IOException e) {
             e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
         }
 
         for (String adm : admins) {
@@ -281,13 +285,18 @@ public class PodcastBot extends TelegramLongPollingBot {
                             "От "+ update.getMessage().getFrom().getFirstName() +
                             "(" + update.getMessage().getFrom().getUserName() + ")\n\n" +
                             "Предложенная тема: " + text);
+
             try {
                 execute(message);
-                logMessage(update, "Админу" + adm + " отправлено предложение темы для рассылки");
             } catch (TelegramApiException e) {
                 e.printStackTrace();
+                logEvent(e.getLocalizedMessage());
             }
         }
+        done(update);
+        logEvent("Пользователь " +
+                update.getMessage().getFrom().getFirstName() + " - " +  update.getMessage().getFrom().getUserName() +
+                "предложил тему: " + text);
     }
 
     private void requestForAdminsMessageSender(Update update, String text) {
@@ -301,6 +310,7 @@ public class PodcastBot extends TelegramLongPollingBot {
             }
         } catch (IOException e) {
             e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
         }
 
         for (String adm : admins) {
@@ -308,32 +318,44 @@ public class PodcastBot extends TelegramLongPollingBot {
                     .setChatId(adm)
                     .setText("Пришел запрос:\n" +
                             text +
-                            "\n\nАвтор:");
+                            "\nАвтор:");
             SendMessage sendClientChatId = new SendMessage()
-                    .setChatId("adm")
-                    .setText(update.getMessage().getChatId().toString());
+                    .setChatId(adm)
+                    .setText(update.getMessage().getChatId().toString()
+                    + "(" + update.getMessage().getFrom().getUserName() +
+                            update.getMessage().getFrom().getFirstName() + ")");
             try {
                 execute(message);
                 execute(sendClientChatId);
-                logMessage(update, "Админам отослан запрос от " + update.getMessage().getChatId());
             } catch (TelegramApiException e) {
                 e.printStackTrace();
+                logEvent(e.getLocalizedMessage());
             }
 
         }
+        done(update);
+        logEvent("Пользователь " +
+                update.getMessage().getFrom().getFirstName() + " - " +  update.getMessage().getFrom().getUserName() +
+                "отправил сообщение: " + text);
     }
 
     //только текстовые ответы
     private void adminReplyMessageSender(Update update, String destinationChatId, String messageText){
         SendMessage message = new SendMessage()
                 .setChatId(destinationChatId)
-                .setText(messageText);
+                .setText("Вам поступил ответ от админа:" +
+                                update.getMessage().getFrom().getFirstName() +
+                                "(" + update.getMessage().getFrom().getUserName() + ")" +
+                        "\n" +
+                        "Ответ: " + messageText);
         try {
             execute(message);
-            logMessage(update, messageText);
         }catch (TelegramApiException e) {
             e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
         }
+        done(update);
+        logEvent("Пользователю отправлен ответ от админа");
     }
 
     //1 - новость, 2 - новый эпизод
@@ -355,6 +377,7 @@ public class PodcastBot extends TelegramLongPollingBot {
             }
         } catch (IOException e) {
             e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
         }
 
         for (String sub : subs) {
@@ -365,10 +388,11 @@ public class PodcastBot extends TelegramLongPollingBot {
                 execute(message);
             } catch (TelegramApiException e) {
                 e.printStackTrace();
+                logEvent(e.getLocalizedMessage());
             }
         }
-        logMessage(update, "Разослано сообщение подписчикам " + fileName);
-        logMessage(update, "Отправлено " + subs.size() + "сообщений");
+        replyMessageSender(update, "Выполнено...");
+        logEvent("Осуществлена рассылка для " + fileName);
     }
     //-----------------------------------------------------------------------------
 
@@ -392,21 +416,21 @@ public class PodcastBot extends TelegramLongPollingBot {
                         "/news - подписаться на новостную рассылку проекта\n" +
                         "/sub - полная подписка\n" +
                         "/status - проверка статуса своих подписок\n" +
+                        "/admin - для взаимодействия с администрацией\n" +
                         "Для отмены подписки используются те же команды, что и для её активации\n" +
-                        "/admin - получить формат сообщения для общения с администрацией\n" +
-                        "(получить список команд для админов, если вы админ)");
+                        "Если вы администратор, то используйте /admin для того, чтобы узнать свои возможности");
     }
 
     private void vol(Update update, int numOfPodcast) {
         SendAudio audio = new SendAudio()
                 .setChatId(update.getMessage().getChatId())
                 .setAudio(Main.vol.get(numOfPodcast - 1));
-        //.setTitle(numOfPodcast + "й выпуск");
         try {
             execute(audio);
-            logMessage(update,  "отправлено аудио - " + audio.getTitle());
+            logEvent("Отправлен " + numOfPodcast + "й эпизод подкаста");
         } catch (TelegramApiException e) {
             e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
         }
     }
 
@@ -474,6 +498,7 @@ public class PodcastBot extends TelegramLongPollingBot {
             replyMessageSender(update, "Добавлена " + subType + " подписка...");
         } catch (IOException e) {
             e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
         }
 
     }
@@ -510,6 +535,7 @@ public class PodcastBot extends TelegramLongPollingBot {
             replyMessageSender(update, "Удалена " + subType + " подписка...");
         } catch (Exception e) {
             e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
         }
     }
 
@@ -526,6 +552,7 @@ public class PodcastBot extends TelegramLongPollingBot {
             }
         } catch (IOException e) {
             e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
         }
         return res;
     }
@@ -544,15 +571,17 @@ public class PodcastBot extends TelegramLongPollingBot {
 
     private void requestForAdminMessageFormat(Update update) {
         replyMessageSender(update, "Формат сообщения для обращения к админам:\n" +
-                "#adm(тип сообщения - обращение к админам)\n" +
-                "#thm/req(тип содержимого - предложение темы/обращение к админам)\n" +
-                "#Текст сообщения\n\n" +
-                "#adm\n" +
-                "#req\n" +
-                "#Уважаемые админы, помогите мне пожалуйста с такой-то и такой-то проблемой\n" +
+                "=adm(тип сообщения - обращение к админам)\n" +
+                "=thm/req(тип содержимого - предложение темы/обращение к админам)\n" +
+                "=Текст сообщения\n\n" +
                 "Возможные типы содержимого в данной ситуации:\n" +
                 "thm - предложить тему для будущих выпусков\n" +
-                "req - обратиться к админам с просьбой\n");
+                "req - обратиться к админам с просьбой\n" +
+                "Прошу вас заметить, что формат сообщения строгий и должен соблюдаться\n" +
+                "Пример сообщения админу:\n");
+        replyMessageSender(update, "=adm\n" +
+                "=req\n" +
+                "=Уважаемые админы, помогите мне пожалуйста с такой-то и такой-то проблемой\n\n");
     }
     //-----------------------------------------------------------------------------
 
@@ -566,7 +595,8 @@ public class PodcastBot extends TelegramLongPollingBot {
                 "/status - получить информацию о количестве подписчиков\n" +
                 "/distribution - получить формат сообщения для рассылки его подписчикам\n" +
                 "/reply - получить формат сообщения для ответа конкретному подписчику\n" +
-                "/ban - получить формат сообщения, для отправки подписчика в бан");
+                "/ban - получить формат сообщения, для отправки подписчика в бан\n" +
+                "Прошу вас заметить, что формат сообщения строгий и должен соблюдаться");
     }
 
     private void statusAdmin(Update update) {
@@ -582,6 +612,7 @@ public class PodcastBot extends TelegramLongPollingBot {
 
         } catch (IOException e) {
             e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
         }
         replyMessageSender(update, "Подписчики новостей: " + newsCounter +
                 "\nПодписчики выпусков: " + volsCounter);
@@ -589,37 +620,37 @@ public class PodcastBot extends TelegramLongPollingBot {
 
     private void distributionMessageFormat(Update update){
         replyMessageSender(update, "Формат сообщения для рассылки:\n" +
-                "#dis(тип сообщения - рассылка)\n" +
-                "#news/episode/all(тип содержимого = тип рассылки)\n" +
-                "#Текст сообщения самой рассылки\n\n" +
+                "=dis(тип сообщения - рассылка)\n" +
+                "=news/episode/all(тип содержимого = тип рассылки)\n" +
+                "=Текст сообщения самой рассылки\n\n" +
                 "Для самой рассылки просто отправте сообщение нужного формата.\n" +
                 "Пример:\n\n" +
-                "#dis\n" +
-                "#all\n" +
-                "#Внимание друзья! Это рассылка!");
+                "=dis\n" +
+                "=all\n" +
+                "=Внимание друзья! Это рассылка!");
     }
 
     private void adminReplyMessageFormat(Update update) {
         replyMessageSender(update, "Формат сообщения для ответа подписчику:\n" +
-                "#rep(типа сообщения - ответ подписчику)\n" +
-                "#000000000(тип содержания - chatId подписчика)\n" +
-                "#Текст сообщения ответа\n\n" +
+                "=rep(тип сообщения - ответ подписчику)\n" +
+                "=000000000(тип содержания - chatId подписчика)\n" +
+                "=Текст сообщения ответа\n\n" +
                 "Для ответа просто отправте сообщение нужного формата.\n" +
                 "Пример:\n\n" +
-                "#rep\n" +
-                "#299233972\n" +
-                "#Спасибо за ваше сообщение! Мой ответ бла бла бля");
+                "=rep\n" +
+                "=299233972\n" +
+                "=Спасибо за ваше сообщение! Мой ответ бла бла бля");
     }
 
     private void banMessageFormat(Update update) {
         replyMessageSender(update, "Формат сообщения для отправки юзера в бан-лист:\n" +
-                "#ban(тип сообщения - забанить юзера\n" +
-                "#0000000(тип содержания - chatId юзера)\n" +
-                "#(текст - в данном случае не нужен, но хэштег обязателен)\n" +
+                "=ban(тип сообщения - забанить юзера\n" +
+                "=0000000(тип содержания - chatId юзера)\n" +
+                "=(текст - в данном случае не нужен, но хэштег обязателен)\n" +
                 "Пример:\n\n" +
-                "#ban\n" +
-                "#0000000\n" +
-                "#");
+                "=ban\n" +
+                "=0000000\n" +
+                "=");
     }
     //-----------------------------------------------------------------------------
 
@@ -646,6 +677,10 @@ public class PodcastBot extends TelegramLongPollingBot {
         //replyMessageSender(update, "Это может занять определенное время(не расстраивайтесь)");
     }
 
+    private void done(Update update) {
+        replyMessageSender(update, "Выполнено...");
+    }
+
     private void ban(Update update, String chatId) {
         try {
             BufferedWriter writer = new BufferedWriter(new FileWriter(new File(BLACKLIST), true));
@@ -655,6 +690,7 @@ public class PodcastBot extends TelegramLongPollingBot {
             replyMessageSender(update, "Юзер " + chatId + " забанен...");
         } catch (IOException e) {
             e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
         }
     }
     //-----------------------------------------------------------------------------
@@ -662,14 +698,12 @@ public class PodcastBot extends TelegramLongPollingBot {
 
 
     //-------------------------------Системные команды-----------------------------
-    private void logMessage(Update update, String messageText) {
+    private void logUsersMessage(Update update) {
 
         String loggingMessage = "--------------------------------------------\n" +
-                "Incoming: " +
                 update.getMessage().getFrom().getFirstName() +
                 "(" + update.getMessage().getFrom().getUserName() + " - " + update.getMessage().getChatId() + ")" +
-                ": " + update.getMessage().getText() +
-                "\nReply: " + messageText;
+                ": " + update.getMessage().getText() + "\n";
         System.out.println(loggingMessage);
 
         try {
@@ -685,6 +719,37 @@ public class PodcastBot extends TelegramLongPollingBot {
             e.printStackTrace();
         }
 
+    }
+
+    private void logBotsMessage(String messageText) {
+        String loggingMessage = "--------------------------------------------\n" +
+                "Bot: " + messageText + "\n";
+        System.out.println(loggingMessage);
+
+        try {
+
+            BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(new File("Log.txt")));
+            bufferedWriter.write(loggingMessage + "\n");
+            bufferedWriter.close();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void logEvent(String event) {
+        String loggingMessage = "--------------------------------------------\n" +
+                event + "\n";
+        System.out.println(loggingMessage);
+
+        try {
+            FileWriter fileWriter = new FileWriter(new File("Log.txt"));
+            BufferedWriter bufferedWriter = new BufferedWriter(fileWriter);
+            bufferedWriter.write(loggingMessage + "\n");
+            bufferedWriter.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private boolean isAdmin(String chatId) {
@@ -703,6 +768,7 @@ public class PodcastBot extends TelegramLongPollingBot {
 
         } catch (Exception e){
             e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
         }
         return res;
     }
@@ -719,6 +785,7 @@ public class PodcastBot extends TelegramLongPollingBot {
             }
         } catch (IOException e) {
             e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
         }
 
         return res;

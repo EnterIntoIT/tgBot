@@ -2,41 +2,41 @@ package com.enterintoit.pupptmstr;
 
 public class AdminMessageParser {
 
-    public String unparsedText;
-    private String error ,messageType, contentType, messageText;
+    private String unparsedText;
+    private String error, messageType, contentType, messageText;
 
     AdminMessageParser(String unparsedText) {
-        this.unparsedText = unparsedText;
+        this.unparsedText = unparsedText.replaceAll("\n", "");
     }
 
     private void parse() {
-        String[] parsedText = unparsedText.split("#");
-        //0й индекс - пустой символ
+        String[] parsedText = unparsedText.split("=");
+        error = parsedText[0];
         messageType = parsedText[1];
         contentType = parsedText[2];
         messageText = parsedText[3];
     }
 
-    public void checkMatchingAndParse() {
-        String[] parsedText = unparsedText.split("#");
+    void checkMatchingAndParse() {
+        String[] parsedText = unparsedText.split("=");
         if (parsedText.length == 4) {
             parse();
         } else error = "error";
     }
 
-    public String getMessageText() {
+    String getMessageText() {
         return messageText;
     }
 
-    public String getMessageType() {
+    String getMessageType() {
         return messageType;
     }
 
-    public String getContentType() {
+    String getContentType() {
         return contentType;
     }
 
-    public String getError() {
+    String getError() {
         return error;
     }
 }

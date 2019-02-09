@@ -3,7 +3,7 @@ plugins {
 }
 
 group 'com.enterintoit.pupptmstr'
-version '0.98'
+version '0.99'
 
 sourceCompatibility = 1.8
 
