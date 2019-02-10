@@ -21,9 +21,8 @@ public class PodcastBot extends TelegramLongPollingBot {
     private static final String VOLS_SUBS = "volsSubs.txt";
     private static final String NEWS_SUBS = "newsSubs.txt";
 
-    //TODO() я сделать команду для автоматического добавления файл-ид нового подкаста
+    //TODO() сделать команду для автоматического добавления файл-ид нового подкаста
 
-    //TODO() переделать в свитч - кейс
     @Override
     public void onUpdateReceived(Update update) {
         if (update.hasMessage() && update.getMessage().hasText()) {

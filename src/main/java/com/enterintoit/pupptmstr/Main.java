@@ -18,10 +18,10 @@ public class Main {
     static ArrayList<String> vol = new ArrayList<>();//массив выпусков подкастов
     static String key;
 
-    private static String PROXY_HOST = "45.76.84.51";
+    private static String PROXY_HOST = "...";//хост прокси
     private static Integer PROXY_PORT = 1080;
-    private static String PROXY_USER = "trytoguesstheusername";
-    private static String PROXY_PASSWORD = "tipidorda";
+    private static String PROXY_USER = "...";//юзернейм для авторизации в прокси
+    private static String PROXY_PASSWORD = "...";//пароль для авторизации в прокси
 
     public static void main(String[] args) {
         try {
