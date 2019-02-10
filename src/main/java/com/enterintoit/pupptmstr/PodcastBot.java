@@ -1,5 +1,6 @@
 package com.enterintoit.pupptmstr;
 
+import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendAudio;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -11,11 +12,18 @@ import java.util.ArrayList;
 
 public class PodcastBot extends TelegramLongPollingBot {
 
+    protected PodcastBot(DefaultBotOptions botOptions) {
+        super(botOptions);
+    }
+
     private static final String BLACKLIST = "blacklist.txt";
     private static final String ADMINS = "admins.txt";
     private static final String VOLS_SUBS = "volsSubs.txt";
     private static final String NEWS_SUBS = "newsSubs.txt";
 
+    //TODO() я сделать команду для автоматического добавления файл-ид нового подкаста
+
+    //TODO() переделать в свитч - кейс
     @Override
     public void onUpdateReceived(Update update) {
         if (update.hasMessage() && update.getMessage().hasText()) {
@@ -58,6 +66,7 @@ public class PodcastBot extends TelegramLongPollingBot {
     }
 
     //-------------------------------------Чекеры----------------------------------
+    //TODO() переделать vol чтобы не редачить исходники с выходом каждого нового эпизода
     private void commandChecker(Update update) {
         switch(update.getMessage().getText()) {
             case "/start":
@@ -86,6 +95,9 @@ public class PodcastBot extends TelegramLongPollingBot {
                 break;
             case "/vol7":
                 vol(update, 7);
+                break;
+            case "/vol8":
+                replyMessageSender(update, "Данный выпуск пока не добавлен в мою бд ");
                 break;
             case "/allVolumes":
                 wait(update);
@@ -596,7 +608,9 @@ public class PodcastBot extends TelegramLongPollingBot {
                 "/distribution - получить формат сообщения для рассылки его подписчикам\n" +
                 "/reply - получить формат сообщения для ответа конкретному подписчику\n" +
                 "/ban - получить формат сообщения, для отправки подписчика в бан\n" +
-                "Прошу вас заметить, что формат сообщения строгий и должен соблюдаться");
+                "Прошу вас заметить, что формат сообщения строгий и должен соблюдаться\n" +
+                "Так же у вас есть возмножность отправить мне аудиозапись и получить её файл-ид\n" +
+                "Это пригодится вам для добавления новых эпизодов в мою бд");
     }
 
     private void statusAdmin(Update update) {
@@ -624,8 +638,8 @@ public class PodcastBot extends TelegramLongPollingBot {
                 "=news/episode/all(тип содержимого = тип рассылки)\n" +
                 "=Текст сообщения самой рассылки\n\n" +
                 "Для самой рассылки просто отправте сообщение нужного формата.\n" +
-                "Пример:\n\n" +
-                "=dis\n" +
+                "Пример:");
+        replyMessageSender(update, "=dis\n" +
                 "=all\n" +
                 "=Внимание друзья! Это рассылка!");
     }
@@ -636,7 +650,8 @@ public class PodcastBot extends TelegramLongPollingBot {
                 "=000000000(тип содержания - chatId подписчика)\n" +
                 "=Текст сообщения ответа\n\n" +
                 "Для ответа просто отправте сообщение нужного формата.\n" +
-                "Пример:\n\n" +
+                "Пример:");
+        replyMessageSender(update,
                 "=rep\n" +
                 "=299233972\n" +
                 "=Спасибо за ваше сообщение! Мой ответ бла бла бля");
@@ -646,11 +661,13 @@ public class PodcastBot extends TelegramLongPollingBot {
         replyMessageSender(update, "Формат сообщения для отправки юзера в бан-лист:\n" +
                 "=ban(тип сообщения - забанить юзера\n" +
                 "=0000000(тип содержания - chatId юзера)\n" +
-                "=(текст - в данном случае не нужен, но хэштег обязателен)\n" +
-                "Пример:\n\n" +
+                "=(текст - в данном случае не важно какой, " +
+                "парсер сообщений настроен так, что тут должно быть хоть что-то)\n" +
+                "Пример:");
+        replyMessageSender(update,
                 "=ban\n" +
                 "=0000000\n" +
-                "=");
+                "=что угодно");
     }
     //-----------------------------------------------------------------------------
 
@@ -668,13 +685,13 @@ public class PodcastBot extends TelegramLongPollingBot {
     }
 
     private void missunderstand(Update update) {
-        replyMessageSender(update, "Простите, возможно я вас не понимаю...\nЭто поможет нам лучше понимать друг друга:");
+        replyMessageSender(update, "Простите, возможно я вас не понимаю...\n" +
+                "Это поможет нам лучше понимать друг друга:");
         help(update);
     }
 
     private void wait(Update update) {
         replyMessageSender(update, "Подождите, выполняю...");
-        //replyMessageSender(update, "Это может занять определенное время(не расстраивайтесь)");
     }
 
     private void done(Update update) {
@@ -728,7 +745,7 @@ public class PodcastBot extends TelegramLongPollingBot {
 
         try {
 
-            BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(new File("Log.txt")));
+            BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(new File("Log.txt"), true));
             bufferedWriter.write(loggingMessage + "\n");
             bufferedWriter.close();
 
@@ -743,7 +760,7 @@ public class PodcastBot extends TelegramLongPollingBot {
         System.out.println(loggingMessage);
 
         try {
-            FileWriter fileWriter = new FileWriter(new File("Log.txt"));
+            FileWriter fileWriter = new FileWriter(new File("Log.txt"), true);
             BufferedWriter bufferedWriter = new BufferedWriter(fileWriter);
             bufferedWriter.write(loggingMessage + "\n");
             bufferedWriter.close();
