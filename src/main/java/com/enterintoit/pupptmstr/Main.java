@@ -5,7 +5,6 @@ import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.meta.ApiContext;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-import org.telegram.telegrambots.meta.generics.BotOptions;
 
 import java.io.*;
 import java.net.Authenticator;
@@ -15,8 +14,8 @@ import java.util.*;
 
 public class Main {
 
-    static ArrayList<String> vol = new ArrayList<>();//массив выпусков подкастов
-    static String key;
+    private static final ArrayList<String> vol = new ArrayList<>();//массив выпусков подкастов
+    private static String key;
 
     private static String PROXY_HOST = "...";//хост прокси
     private static Integer PROXY_PORT = 1080;
@@ -64,6 +63,24 @@ public class Main {
             e.printStackTrace();
         }
 
+    }
+
+    /**package-private*/
+    static int getNumOfEpisodes() {
+        return vol.size();
+    }
+
+    /**package-private*/
+    static String getEpisode(int numOfEpisode) {
+        if (numOfEpisode <= getNumOfEpisodes())
+            return vol.get(numOfEpisode - 1);
+
+        return "Error";
+    }
+
+    /**package-private*/
+    static String getKey() {
+        return key;
     }
 
 }

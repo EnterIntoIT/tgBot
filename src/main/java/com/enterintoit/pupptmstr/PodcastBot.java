@@ -12,7 +12,7 @@ import java.util.ArrayList;
 
 public class PodcastBot extends TelegramLongPollingBot {
 
-    protected PodcastBot(DefaultBotOptions botOptions) {
+    PodcastBot(DefaultBotOptions botOptions) {
         super(botOptions);
     }
 
@@ -21,7 +21,7 @@ public class PodcastBot extends TelegramLongPollingBot {
     private static final String VOLS_SUBS = "volsSubs.txt";
     private static final String NEWS_SUBS = "newsSubs.txt";
 
-    //TODO() сделать команду для автоматического добавления файл-ид нового подкаста
+    //TODO() исправить фразы
 
     @Override
     public void onUpdateReceived(Update update) {
@@ -61,11 +61,10 @@ public class PodcastBot extends TelegramLongPollingBot {
 
     @Override
     public String getBotToken() {
-        return Main.key;
+        return Main.getKey();
     }
 
     //-------------------------------------Чекеры----------------------------------
-    //TODO() переделать vol чтобы не редачить исходники с выходом каждого нового эпизода
     private void commandChecker(Update update) {
         switch(update.getMessage().getText()) {
             case "/start":
@@ -73,30 +72,6 @@ public class PodcastBot extends TelegramLongPollingBot {
             break;
             case "/help":
                 help(update);
-                break;
-            case "/vol1":
-                vol(update, 1);
-                break;
-            case "/vol2":
-                vol(update, 2);
-                break;
-            case "/vol3":
-                vol(update, 3);
-                break;
-            case "/vol4":
-                vol(update, 4);
-                break;
-            case "/vol5":
-                vol(update, 5);
-                break;
-            case "/vol6":
-                vol(update, 6);
-                break;
-            case "/vol7":
-                vol(update, 7);
-                break;
-            case "/vol8":
-                replyMessageSender(update, "Данный выпуск пока не добавлен в мою бд ");
                 break;
             case "/allVolumes":
                 wait(update);
@@ -138,29 +113,36 @@ public class PodcastBot extends TelegramLongPollingBot {
                 if (isAdmin(update.getMessage().getChatId().toString())) {
                     adminReplyMessageFormat(update);
                 } else {
-                    replyMessageSender(update, "Эмммм, ты кто такой?\n" +
-                            "Ты не админ, брат.\nНе используй эту команду");
+                    replyMessageSender(update, "Ты не админ, брат.\nНе используй эту команду");
                 }
                 break;
             case "/distribution":
                 if (isAdmin(update.getMessage().getChatId().toString())) {
                     distributionMessageFormat(update);
                 } else {
-                    replyMessageSender(update, "Эмммм, ты кто такой?\n" +
-                            "Ты не админ, брат.\nНе используй эту команду");
+                    replyMessageSender(update, "Ты не админ, брат.\nНе используй эту команду");
                 }
                 break;
             case "/ban":
                 if (isAdmin(update.getMessage().getChatId().toString()))
                     banMessageFormat(update);
                 else
-                    replyMessageSender(update, "Эмммм, ты кто такой?\n" +
-                            "Ты не админ, брат.\nНе используй эту команду");
+                    replyMessageSender(update, "Ты не админ, брат.\nНе используй эту команду");
+                break;
+            case "/addVol":
+                if (isAdmin(update.getMessage().getChatId().toString())){
+                    addVolMessageFormat(update);
+                } else
+                    replyMessageSender(update, "Ты не админ, брат.\nНе используй эту команду");
                 break;
             default:
-                replyMessageSender(update, "Вау, комада! Сейчас я её как выполню!" +
-                        "\n...\nНичего не вышло, а жаль\n" +
-                        "Исправте команду и попробуйте еще раз");
+                if (update.getMessage().getText().matches("/vol_\\d+")) {
+                    vol(update, Integer.parseInt(update.getMessage().getText().substring(5)));
+                } else {
+                    replyMessageSender(update, "Вау, комада! Сейчас я её ка-а-ак выполню!" +
+                            "\n...\nНичего не вышло. Жаль.\n" +
+                            "Исправте команду и попробуйте еще раз");
+                }
         }
     }
 
@@ -174,14 +156,14 @@ public class PodcastBot extends TelegramLongPollingBot {
                         case "thm":
                             if (isBaned(update.getMessage().getChatId().toString()))
                                 replyMessageSender(update, "Вы находитесь в черном списке, " +
-                                        "данная функция для вас недоступна");
+                                        "данная функция для Вас недоступна");
                             else
                                 themeForAdminMessageSender(update, messageParser.getMessageText());
                             break;
                         case "req":
                             if (isBaned(update.getMessage().getChatId().toString()))
                                 replyMessageSender(update, "Вы находитесь в черном списке, " +
-                                        "данная функция для вас недоступна");
+                                        "данная функция для Вас недоступна");
                             else
                                 requestForAdminsMessageSender(update, messageParser.getMessageText());
                             break;
@@ -225,10 +207,18 @@ public class PodcastBot extends TelegramLongPollingBot {
                             if (!isBaned(messageParser.getContentType()))
                                 ban(update, messageParser.getContentType());
                             else
-                                replyMessageSender(update, "Данный юзер уже забанен...");
+                                unBan(update, messageParser.getContentType());
                         } else
                             replyMessageSender(update, "Неверный chatId");
                     }
+                case "addv":
+                    if (isAdmin(update.getMessage().getChatId().toString())) {
+                        if (isNewVol(messageParser.getContentType()))
+                            addVol(update, messageParser.getContentType());
+                        else
+                            replyMessageSender(update, "Данный выпуск уже добавлен.");
+                    }
+                    break;
                 default:
                     replyMessageSender(update, "Ошибка в типе сообщения, попробуйте еще раз.");
 
@@ -242,6 +232,9 @@ public class PodcastBot extends TelegramLongPollingBot {
         switch (update.getMessage().getText().toLowerCase()) {
             case "хуй":
                 replyMessageSender(update, "залупа");
+                break;
+            case "залупа":
+                replyMessageSender(update, "хуй");
                 break;
             case "пидор":
                 replyMessageSender(update, "ты");
@@ -357,7 +350,7 @@ public class PodcastBot extends TelegramLongPollingBot {
                 .setText("Вам поступил ответ от админа:" +
                                 update.getMessage().getFrom().getFirstName() +
                                 "(" + update.getMessage().getFrom().getUserName() + ")" +
-                        "\n" +
+                        "\n\n" +
                         "Ответ: " + messageText);
         try {
             execute(message);
@@ -414,46 +407,49 @@ public class PodcastBot extends TelegramLongPollingBot {
     //-----------------------------Пользовательские команды------------------------
     private void help(Update update) {
         replyMessageSender(update,
-                "Я чат-бот проекта ЗайдиВАйТи\n" +
-                        "Это тестовая версия, так что умею я пока не много\n" +
+                "Я чат-бот проекта <<ЗайдиВАйТи>>\n" +
+                        "Это тестовая версия, так что умею я пока совсем немного\n" +
                         "Буду рад feedback'y)\n" +
                         "Вот что я могу:\n" +
                         "/help - помощь(это самое меню)\n" +
-                        "/vol{№} - выслать выпуск c указанным номером\n" +
-                        "Например /vol2\n" +
+                        "/vol_{№} - выслать выпуск c указанным номером\n" +
+                        "Например /vol_2\n" +
                         "/allVolumes - выслать все выпуски по порядку\n" +
                         "/volumesList - выслать полный список выпусков\n" +
                         "/vols - подписаться на рассылку новых выпусков\n" +
                         "/news - подписаться на новостную рассылку проекта\n" +
                         "/sub - полная подписка\n" +
                         "/status - проверка статуса своих подписок\n" +
-                        "/admin - для взаимодействия с администрацией\n" +
+                        "/admin - для взаимодействия с администрацией\n\n" +
                         "Для отмены подписки используются те же команды, что и для её активации\n" +
                         "Если вы администратор, то используйте /admin для того, чтобы узнать свои возможности");
     }
 
     private void vol(Update update, int numOfPodcast) {
-        SendAudio audio = new SendAudio()
-                .setChatId(update.getMessage().getChatId())
-                .setAudio(Main.vol.get(numOfPodcast - 1));
-        try {
-            execute(audio);
-            logEvent("Отправлен " + numOfPodcast + "й эпизод подкаста");
-        } catch (TelegramApiException e) {
-            e.printStackTrace();
-            logEvent(e.getLocalizedMessage());
-        }
+        if (numOfPodcast <= Main.getNumOfEpisodes()) {
+            SendAudio audio = new SendAudio()
+                    .setChatId(update.getMessage().getChatId())
+                    .setAudio(Main.getEpisode(numOfPodcast));
+            try {
+                execute(audio);
+                logEvent("Отправлен " + numOfPodcast + "й эпизод подкаста");
+            } catch (TelegramApiException e) {
+                e.printStackTrace();
+                logEvent(e.getLocalizedMessage());
+            }
+        } else
+            replyMessageSender(update, "Данного выпуска нет в моей базе данных");
     }
 
     private void allVolumes(Update update) {
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < Main.getNumOfEpisodes(); i++) {
             vol(update, i+1);
         }
     }
 
     private void volumesList(Update update) {
         replyMessageSender(update,
-                "Список всех эпизодов подкаста:\n" +
+                "Список всех эпизодов подкаста:\n\n" +
                         "/vol1 - 1.Вводный выпуск(ч.1)\n" +
                         "/vol2 - 2.Вводный выпуск(ч.2)\n" +
                         "/vol3 - 3.От железа до ОСей(ч.1 Железо)\n" +
@@ -467,29 +463,29 @@ public class PodcastBot extends TelegramLongPollingBot {
     private void subsAction(Update update, int typeOfSub) {
         switch (typeOfSub) {
             case 1:
-                if (isSub(update, "newsSubs.txt"))
-                    deleteSub(update, "newsSubs.txt");
+                if (isSub(update, NEWS_SUBS))
+                    deleteSub(update, NEWS_SUBS);
                 else
-                    addSub(update, "newsSubs.txt");
+                    addSub(update, NEWS_SUBS);
                 break;
             case 2:
-                if (isSub(update, "volsSubs.txt"))
-                    deleteSub(update, "volsSubs.txt");
+                if (isSub(update, VOLS_SUBS))
+                    deleteSub(update, VOLS_SUBS);
                 else
-                    addSub(update, "volsSubs.txt");
+                    addSub(update, VOLS_SUBS);
                 break;
             case 0:
-                if (!isSub(update, "volsSubs.txt")){
-                    if (!isSub(update, "newsSubs.txt"))
-                        addSub(update, "newsSubs.txt");
-                    addSub(update, "volsSubs.txt");
-                } else if (!isSub(update, "newsSubs.txt")){
-                    if (!isSub(update, "volsSubs.txt"))
-                        addSub(update, "volsSubs.txt");
-                    addSub(update, "newsSubs.txt");
+                if (!isSub(update, VOLS_SUBS)){
+                    if (!isSub(update, NEWS_SUBS))
+                        addSub(update, NEWS_SUBS);
+                    addSub(update, VOLS_SUBS);
+                } else if (!isSub(update, NEWS_SUBS)){
+                    if (!isSub(update, VOLS_SUBS))
+                        addSub(update, VOLS_SUBS);
+                    addSub(update, NEWS_SUBS);
                 } else {
-                    deleteSub(update, "volsSubs.txt");
-                    deleteSub(update, "newsSubs.txt");
+                    deleteSub(update, VOLS_SUBS);
+                    deleteSub(update, NEWS_SUBS);
                 }
                 break;
         }
@@ -569,26 +565,31 @@ public class PodcastBot extends TelegramLongPollingBot {
     }
 
     private void statusSub(Update update) {
-        String newsSub = "off", volsSub = "off";
+        String newsSub = "off", volsSub = "off", baned = "off";
         if (isSub(update, NEWS_SUBS))
             newsSub = "on";
         if(isSub(update, VOLS_SUBS))
             volsSub = "on";
+        if(isBaned(update.getMessage().getChatId().toString()))
+            baned = "on";
+
         replyMessageSender(update,  update.getMessage().getFrom().getFirstName() +
                 "(" + update.getMessage().getFrom().getUserName() + ")" +
                 "\nНовостная подписка: " + newsSub +
-                "\nЭпизодическая подписка: " + volsSub);
+                "\nЭпизодическая подписка: " + volsSub +
+                "\nБан общения с админами: " + baned);
     }
 
     private void requestForAdminMessageFormat(Update update) {
-        replyMessageSender(update, "Формат сообщения для обращения к админам:\n" +
+        replyMessageSender(update, "Формат сообщения для обращения к админам:\n\n" +
                 "=adm(тип сообщения - обращение к админам)\n" +
                 "=thm/req(тип содержимого - предложение темы/обращение к админам)\n" +
-                "=Текст сообщения\n\n" +
+                "=Текст сообщения\n" +
                 "Возможные типы содержимого в данной ситуации:\n" +
                 "thm - предложить тему для будущих выпусков\n" +
                 "req - обратиться к админам с просьбой\n" +
                 "Прошу вас заметить, что формат сообщения строгий и должен соблюдаться\n" +
+                "Это должно быть одним сообщением минимум в 3 строки\n" +
                 "Пример сообщения админу:\n");
         replyMessageSender(update, "=adm\n" +
                 "=req\n" +
@@ -606,14 +607,15 @@ public class PodcastBot extends TelegramLongPollingBot {
                 "/status - получить информацию о количестве подписчиков\n" +
                 "/distribution - получить формат сообщения для рассылки его подписчикам\n" +
                 "/reply - получить формат сообщения для ответа конкретному подписчику\n" +
-                "/ban - получить формат сообщения, для отправки подписчика в бан\n" +
+                "/ban - получить формат сообщения для отправки подписчика в бан\n" +
+                "/addVol - получить формат сообщения для добавления нового эпизода подкаста\n\n" +
                 "Прошу вас заметить, что формат сообщения строгий и должен соблюдаться\n" +
                 "Так же у вас есть возмножность отправить мне аудиозапись и получить её файл-ид\n" +
                 "Это пригодится вам для добавления новых эпизодов в мою бд");
     }
 
     private void statusAdmin(Update update) {
-        int newsCounter = 0, volsCounter = 0;
+        int newsCounter = 0, volsCounter = 0, banedUser = 0;
         try {
             BufferedReader reader = new BufferedReader(new FileReader(new File(NEWS_SUBS)));
             while (reader.readLine() != null)
@@ -623,20 +625,25 @@ public class PodcastBot extends TelegramLongPollingBot {
             while (reader.readLine() != null)
                 volsCounter++;
 
+            reader = new BufferedReader(new FileReader(new File(BLACKLIST)));
+            while (reader.readLine() != null)
+                banedUser++;
+
         } catch (IOException e) {
             e.printStackTrace();
             logEvent(e.getLocalizedMessage());
         }
         replyMessageSender(update, "Подписчики новостей: " + newsCounter +
-                "\nПодписчики выпусков: " + volsCounter);
+                "\nПодписчики выпусков: " + volsCounter +
+                "\nЗабанено юзеров: " + banedUser);
     }
 
     private void distributionMessageFormat(Update update){
         replyMessageSender(update, "Формат сообщения для рассылки:\n" +
                 "=dis(тип сообщения - рассылка)\n" +
                 "=news/episode/all(тип содержимого = тип рассылки)\n" +
-                "=Текст сообщения самой рассылки\n\n" +
-                "Для самой рассылки просто отправте сообщение нужного формата.\n" +
+                "=Текст сообщения самой рассылки\n" +
+                "Для самой рассылки просто отправте сообщение нужного формата.\n\n" +
                 "Пример:");
         replyMessageSender(update, "=dis\n" +
                 "=all\n" +
@@ -647,8 +654,8 @@ public class PodcastBot extends TelegramLongPollingBot {
         replyMessageSender(update, "Формат сообщения для ответа подписчику:\n" +
                 "=rep(тип сообщения - ответ подписчику)\n" +
                 "=000000000(тип содержания - chatId подписчика)\n" +
-                "=Текст сообщения ответа\n\n" +
-                "Для ответа просто отправте сообщение нужного формата.\n" +
+                "=Текст сообщения ответа\n" +
+                "Для ответа просто отправте сообщение нужного формата.\n\n" +
                 "Пример:");
         replyMessageSender(update,
                 "=rep\n" +
@@ -667,6 +674,76 @@ public class PodcastBot extends TelegramLongPollingBot {
                 "=ban\n" +
                 "=0000000\n" +
                 "=что угодно");
+    }
+
+    private void addVolMessageFormat(Update update) {
+        replyMessageSender(update,"Формат сообщения для добавления нового выпуска подкаста:" +
+                "=addv(тип сообщения - добавление нового выпуска)\n" +
+                "={fileId}(тип содержания - file-id новыго выпуска)\n" +
+                "=(текст - в данном случае не важно какой, " +
+                "парсер сообщений настроен так, что тут должно быть хоть что-то)\n" +
+                "Пример:");
+        replyMessageSender(update, "=addv\n" +
+                "=CQADAgAD-gMAAqrh0EpUwBp4EqwZ2QI\n" +
+                "=что угодно");
+
+    }
+
+    private void ban(Update update, String chatId) {
+        try {
+            BufferedWriter writer = new BufferedWriter(new FileWriter(new File(BLACKLIST), true));
+            writer.write(chatId);
+            writer.newLine();
+            writer.close();
+            replyMessageSender(update, "Юзер " + chatId + " забанен...");
+        } catch (IOException e) {
+            e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
+        }
+    }
+
+    private void unBan(Update update, String chatId) {
+        try {
+            File file = new File(BLACKLIST);
+            BufferedReader reader = new BufferedReader(new FileReader(file));
+            File tempFile = new File(BLACKLIST + ".tmp");
+            BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile, true));
+            String line;
+            while((line = reader.readLine()) != null) {
+                if (line.equals(chatId)) continue;
+                writer.write(line);
+                writer.newLine();
+            }
+            writer.close();
+            reader.close();
+
+            if (file.delete()) {
+                System.out.println("Удаление успешно.");
+                if (tempFile.renameTo(file))
+                    System.out.println("Переименование успешно.");
+                else
+                    System.out.println("Ошибка переименования.");
+            } else
+                System.out.println("Ошибка удаления.");
+            replyMessageSender(update, "Юзер " + chatId + " разбанен");
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
+        }
+    }
+
+    private void addVol(Update update, String fileId) {
+        try {
+            BufferedWriter writer = new BufferedWriter(new FileWriter(new File("audioIds.txt"), true));
+            writer.write(fileId);
+            writer.newLine();
+            writer.close();
+            replyMessageSender(update, "Новый выпуск добавлен.");
+        } catch (IOException e) {
+            e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
+        }
     }
     //-----------------------------------------------------------------------------
 
@@ -695,19 +772,6 @@ public class PodcastBot extends TelegramLongPollingBot {
 
     private void done(Update update) {
         replyMessageSender(update, "Выполнено...");
-    }
-
-    private void ban(Update update, String chatId) {
-        try {
-            BufferedWriter writer = new BufferedWriter(new FileWriter(new File(BLACKLIST), true));
-            writer.write(chatId);
-            writer.newLine();
-            writer.close();
-            replyMessageSender(update, "Юзер " + chatId + " забанен...");
-        } catch (IOException e) {
-            e.printStackTrace();
-            logEvent(e.getLocalizedMessage());
-        }
     }
     //-----------------------------------------------------------------------------
 
@@ -804,6 +868,22 @@ public class PodcastBot extends TelegramLongPollingBot {
             logEvent(e.getLocalizedMessage());
         }
 
+        return res;
+    }
+
+    private boolean isNewVol(String fileId) {
+        boolean res = true;
+        try {
+            BufferedReader reader = new BufferedReader(new FileReader(new File("audioIds.txt")));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.equals(fileId))
+                    res = false;
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            logEvent(e.getLocalizedMessage());
+        }
         return res;
     }
     //-----------------------------------------------------------------------------
